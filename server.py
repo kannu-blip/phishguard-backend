@@ -116,14 +116,22 @@ def phishing_contributions(explainer, x, n_features):
 
 def model_part(url):
     """Blocking work (model + SHAP); run in a thread pool."""
-    x = np.asarray([extract_features_vector(url)], dtype=float)
+    feature_values = dict(zip(FEATURE_NAMES, extract_features_vector(url)))
+    x = np.asarray([[feature_values[name] for name in FEATURE_NAMES]], dtype=float)
     proba = float(STATE.model.predict_proba(x)[0][STATE.pos_idx])
     contrib = phishing_contributions(STATE.explainer, x, len(FEATURE_NAMES))
     top = np.argsort(-np.abs(contrib))[:4]
-    reasons = [
-        {"signal": FRIENDLY_NAMES[FEATURE_NAMES[i]], "impact": round(float(contrib[i]) * 100, 1)}
-        for i in top if abs(contrib[i]) * 100 >= 0.1
-    ]
+    reasons = []
+    for i in top:
+        impact = round(float(contrib[i]) * 100, 1)
+        if abs(impact) < 0.1:
+            continue
+        feature = FEATURE_NAMES[i]
+        signal = FRIENDLY_NAMES[feature]
+        if feature == "is_https":
+            protocol = "HTTPS" if feature_values[feature] else "HTTP"
+            signal = f"HTTPS status: {protocol}"
+        reasons.append({"signal": signal, "impact": impact})
     return proba, reasons
 
 
